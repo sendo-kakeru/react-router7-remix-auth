@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@oslojs/crypto':
+        specifier: ^1.0.1
+        version: 1.0.1
+      '@oslojs/encoding':
+        specifier: ^1.1.0
+        version: 1.1.0
+      '@oslojs/oauth2':
+        specifier: ^0.5.0
+        version: 0.5.0
       '@react-router/fs-routes':
         specifier: 0.0.0-nightly-bf7ecb711-20240911
         version: 0.0.0-nightly-bf7ecb711-20240911(@react-router/dev@7.0.0-pre.6(@react-router/serve@7.0.0-pre.6(react-router@7.0.0-pre.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(typescript@5.6.3))(react-router@7.0.0-pre.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(typescript@5.6.3)(vite@5.4.11))(typescript@5.6.3)
@@ -17,6 +26,9 @@ importers:
       '@react-router/serve':
         specifier: 7.0.0-pre.6
         version: 7.0.0-pre.6(react-router@7.0.0-pre.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(typescript@5.6.3)
+      debug:
+        specifier: ^4.3.7
+        version: 4.3.7
       isbot:
         specifier: ^5.1.17
         version: 5.1.17
@@ -33,6 +45,9 @@ importers:
       '@react-router/dev':
         specifier: 7.0.0-pre.6
         version: 7.0.0-pre.6(@react-router/serve@7.0.0-pre.6(react-router@7.0.0-pre.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(typescript@5.6.3))(react-router@7.0.0-pre.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(typescript@5.6.3)(vite@5.4.11)
+      '@types/debug':
+        specifier: ^4.1.12
+        version: 4.1.12
       '@types/react':
         specifier: ^18.3.9
         version: 18.3.12
@@ -390,6 +405,21 @@ packages:
     resolution: {integrity: sha512-gGq0NJkIGSwdbUt4yhdF8ZrmkGKVz9vAdVzpOfnom+V8PLSmSOVhZwbNvZZS1EYcJN5hzzKBxmmVVAInM6HQLg==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
+  '@oslojs/asn1@1.0.0':
+    resolution: {integrity: sha512-zw/wn0sj0j0QKbIXfIlnEcTviaCzYOY3V5rAyjR6YtOByFtJiT574+8p9Wlach0lZH9fddD4yb9laEAIl4vXQA==}
+
+  '@oslojs/binary@1.0.0':
+    resolution: {integrity: sha512-9RCU6OwXU6p67H4NODbuxv2S3eenuQ4/WFLrsq+K/k682xrznH5EVWA7N4VFk9VYVcbFtKqur5YQQZc0ySGhsQ==}
+
+  '@oslojs/crypto@1.0.1':
+    resolution: {integrity: sha512-7n08G8nWjAr/Yu3vu9zzrd0L9XnrJfpMioQcvCMxBIiF5orECHe5/3J0jmXRVvgfqMm/+4oxlQ+Sq39COYLcNQ==}
+
+  '@oslojs/encoding@1.1.0':
+    resolution: {integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==}
+
+  '@oslojs/oauth2@0.5.0':
+    resolution: {integrity: sha512-t70+e4EgnzTbU4MrUWXzqWN2A6RJrlSSvwwuBv6E0Ap6/nsIXrjsdRWeTcSvvXTcC6fi0YdWaqEWLipcEm2Cgw==}
+
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
@@ -543,8 +573,14 @@ packages:
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
 
+  '@types/debug@4.1.12':
+    resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
+
   '@types/estree@1.0.6':
     resolution: {integrity: sha512-AYnb1nQyY49te+VRAVgmzfcgjYS91mY5P0TKUDCLEM+gNnA+3T6rWITXRLYCpahpqSQbN5cE+gHpnPyXjHWxcw==}
+
+  '@types/ms@0.7.34':
+    resolution: {integrity: sha512-nG96G3Wp6acyAgJqGasjODb+acrI7KltPiRxzHPXnP3NgI28bpQDRv53olbqGXbfcgF5aiiHmO3xpwEpS5Ld9g==}
 
   '@types/prop-types@15.7.13':
     resolution: {integrity: sha512-hCZTSvwbzWGvhqxp/RqVqwU999pBf2vp7hzIjiYOsl8wqOmUxkQ6ddw1cV3l8811+kdUFus/q4d1Y3E3SyEifA==}
@@ -1986,6 +2022,21 @@ snapshots:
     dependencies:
       which: 3.0.1
 
+  '@oslojs/asn1@1.0.0':
+    dependencies:
+      '@oslojs/binary': 1.0.0
+
+  '@oslojs/binary@1.0.0': {}
+
+  '@oslojs/crypto@1.0.1':
+    dependencies:
+      '@oslojs/asn1': 1.0.0
+      '@oslojs/binary': 1.0.0
+
+  '@oslojs/encoding@1.1.0': {}
+
+  '@oslojs/oauth2@0.5.0': {}
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -2133,7 +2184,13 @@ snapshots:
 
   '@types/cookie@0.6.0': {}
 
+  '@types/debug@4.1.12':
+    dependencies:
+      '@types/ms': 0.7.34
+
   '@types/estree@1.0.6': {}
+
+  '@types/ms@0.7.34': {}
 
   '@types/prop-types@15.7.13': {}
 
