@@ -1,0 +1,20 @@
+
+generator client {
+  provider      = "prisma-client-js"
+  previewFeatures = ["driverAdapters", "fullTextSearch"]
+  binaryTargets = ["native", "debian-openssl-1.1.x", "linux-arm64-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String           @id @default(cuid())
+  email                 String           @unique
+  name                  String
+  isActive              Boolean          @default(true)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+}
