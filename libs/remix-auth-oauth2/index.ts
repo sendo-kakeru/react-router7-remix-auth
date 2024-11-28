@@ -1,443 +1,429 @@
 import {
-	type AppLoadContext,
-	type SessionStorage,
-	redirect,
+  AppLoadContext,
+  redirect,
+  SessionStorage,
 } from "react-router";
 import createDebug from "debug";
 import {
-	type AuthenticateOptions,
-	Strategy,
-	type StrategyVerifyCallback,
+  AuthenticateOptions,
+  Strategy,
+  StrategyVerifyCallback,
 } from "../remix-auth";
-import { AuthorizationCode } from "./authorization-code.js";
-import { Generator } from "./generator.js";
-import { OAuth2Request } from "./request.js";
-import { Token } from "./token.js";
+import { v4 as uuid } from "uuid";
 
 let debug = createDebug("OAuth2Strategy");
 
 export interface OAuth2Profile {
-	provider: string;
-	id?: string;
-	displayName?: string;
-	name?: {
-		familyName?: string;
-		givenName?: string;
-		middleName?: string;
-	};
-	emails?: Array<{
-		value: string;
-		type?: string;
-	}>;
-	photos?: Array<{ value: string }>;
+  provider: string;
+  id?: string;
+  displayName?: string;
+  name?: {
+    familyName?: string;
+    givenName?: string;
+    middleName?: string;
+  };
+  emails?: Array<{
+    value: string;
+    type?: string;
+  }>;
+  photos?: Array<{ value: string }>;
 }
 
-type URLConstructor = ConstructorParameters<typeof URL>[0];
+type ResponseType =
+  | "id_token"
+  | "token"
+  | "id_token token"
+  | "code"
+  | "code id_token"
+  | "code id_token token";
 
 export interface OAuth2StrategyOptions {
-	/**
-	 * This is the Client ID of your application, provided to you by the Identity
-	 * Provider you're using to authenticate users.
-	 */
-	clientId: string;
-	/**
-	 * This is the Client Secret of your application, provided to you by the
-	 * Identity Provider you're using to authenticate users.
-	 */
-	clientSecret: string;
-
-	/**
-	 * The endpoint the Identity Provider asks you to send users to log in, or
-	 * authorize your application.
-	 */
-	authorizationEndpoint: URLConstructor;
-	/**
-	 * The endpoint the Identity Provider uses to let's you exchange an access
-	 * code for an access and refresh token.
-	 */
-	tokenEndpoint: URLConstructor;
-	/**
-	 * The URL of your application where the Identity Provider will redirect the
-	 * user after they've logged in or authorized your application.
-	 */
-	redirectURI: URLConstructor;
-
-	/**
-	 * The endpoint the Identity Provider uses to revoke an access or refresh
-	 * token, this can be useful to log out the user.
-	 */
-	tokenRevocationEndpoint?: URLConstructor;
-
-	/**
-	 * The scopes you want to request from the Identity Provider, this is a list
-	 * of strings that represent the permissions you want to request from the
-	 * user.
-	 */
-	scopes?: string[];
-
-	/**
-	 * The code challenge method to use when sending the authorization request.
-	 * This is used when the Identity Provider requires a code challenge to be
-	 * sent with the authorization request.
-	 * @default "S256"
-	 */
-	codeChallengeMethod?: "S256" | "plain";
-
-	/**
-	 * The method to use to authenticate with the Identity Provider, this can be
-	 * either `http_basic_auth` or `request_body`.
-	 * @default "request_body"
-	 */
-	authenticateWith?: "http_basic_auth" | "request_body";
+  authorizationURL: string;
+  tokenURL: string;
+  clientID: string;
+  clientSecret: string;
+  callbackURL: string;
+  scope?: string;
+  responseType?: ResponseType;
+  useBasicAuthenticationHeader?: boolean;
 }
 
 export interface OAuth2StrategyVerifyParams<
-	Profile extends OAuth2Profile,
-	ExtraTokenParams extends Record<string, unknown> = Record<string, never>,
+  Profile extends OAuth2Profile,
+  ExtraParams extends Record<string, unknown> = Record<string, never>,
 > {
-	tokens: Token.Response.Body & ExtraTokenParams;
-	profile: Profile;
-	request: Request;
-	context?: AppLoadContext;
+  accessToken: string;
+  refreshToken?: string;
+  extraParams: ExtraParams;
+  profile: Profile;
+  context?: AppLoadContext;
+  request: Request;
 }
 
+/**
+ * The OAuth 2.0 authentication strategy authenticates requests using the OAuth
+ * 2.0 framework.
+ *
+ * OAuth 2.0 provides a facility for delegated authentication, whereby users can
+ * authenticate using a third-party service such as Facebook.  Delegating in
+ * this manner involves a sequence of events, including redirecting the user to
+ * the third-party service for authorization.  Once authorization has been
+ * granted, the user is redirected back to the application and an authorization
+ * code can be used to obtain credentials.
+ *
+ * Applications must supply a `verify` callback, for which the function
+ * signature is:
+ *
+ *     function(accessToken, refreshToken, profile) { ... }
+ *
+ * The verify callback is responsible for finding or creating the user, and
+ * returning the resulting user object.
+ *
+ * An AuthorizationError should be raised to indicate an authentication failure.
+ *
+ * Options:
+ * - `authorizationURL`  URL used to obtain an authorization grant
+ * - `tokenURL`          URL used to obtain an access token
+ * - `clientID`          identifies client to service provider
+ * - `clientSecret`      secret used to establish ownership of the client identifier
+ * - `callbackURL`       URL to which the service provider will redirect the user after obtaining authorization
+ *
+ * @example
+ * authenticator.use(new OAuth2Strategy(
+ *   {
+ *     authorizationURL: 'https://www.example.com/oauth2/authorize',
+ *     tokenURL: 'https://www.example.com/oauth2/token',
+ *     clientID: '123-456-789',
+ *     clientSecret: 'shhh-its-a-secret'
+ *     callbackURL: 'https://www.example.net/auth/example/callback'
+ *   },
+ *   async ({ accessToken, refreshToken, profile }) => {
+ *     return await User.findOrCreate(...);
+ *   }
+ * ));
+ */
 export class OAuth2Strategy<
-	User,
-	Profile extends OAuth2Profile,
-	ExtraParams extends Record<string, unknown> = Record<string, never>,
+  User,
+  Profile extends OAuth2Profile,
+  ExtraParams extends Record<string, unknown> = Record<string, never>,
 > extends Strategy<User, OAuth2StrategyVerifyParams<Profile, ExtraParams>> {
-	name = "oauth2";
+  name = "oauth2";
 
-	protected sessionStateKey = "oauth2:state";
-	protected sessionCodeVerifierKey = "oauth2:codeVerifier";
-	protected options: OAuth2StrategyOptions;
+  protected authorizationURL: string;
+  protected tokenURL: string;
+  protected clientID: string;
+  protected clientSecret: string;
+  protected callbackURL: string;
+  protected responseType: ResponseType;
+  protected useBasicAuthenticationHeader: boolean;
+  protected scope?: string;
 
-	constructor(
-		options: OAuth2StrategyOptions,
-		verify: StrategyVerifyCallback<
-			User,
-			OAuth2StrategyVerifyParams<Profile, ExtraParams>
-		>,
-	) {
-		super(verify);
-		this.options = {
-			codeChallengeMethod: "S256",
-			authenticateWith: "request_body",
-			...options,
-		};
-	}
+  private sessionStateKey = "oauth2:state";
 
-	async authenticate(
-		request: Request,
-		sessionStorage: SessionStorage,
-		options: AuthenticateOptions,
-	): Promise<User> {
-		debug("Request URL", request.url);
+  constructor(
+    options: OAuth2StrategyOptions,
+    verify: StrategyVerifyCallback<
+      User,
+      OAuth2StrategyVerifyParams<Profile, ExtraParams>
+    >,
+  ) {
+    super(verify);
+    this.authorizationURL = options.authorizationURL;
+    this.tokenURL = options.tokenURL;
+    this.clientID = options.clientID;
+    this.clientSecret = options.clientSecret;
+    this.callbackURL = options.callbackURL;
+    this.scope = options.scope;
+    this.responseType = options.responseType ?? "code";
+    this.useBasicAuthenticationHeader =
+      options.useBasicAuthenticationHeader ?? false;
+  }
 
-		let url = new URL(request.url);
+  async authenticate(
+    request: Request,
+    sessionStorage: SessionStorage,
+    options: AuthenticateOptions,
+  ): Promise<User> {
+    debug("Request URL", request.url);
+    let url = new URL(request.url);
+    let session = await sessionStorage.getSession(
+      request.headers.get("Cookie"),
+    );
 
-		if (url.searchParams.has("error")) {
-			return this.failure(
-				"Error on authentication",
-				request,
-				sessionStorage,
-				options,
-				new OAuth2Error(request, {
-					error: url.searchParams.get("error") ?? undefined,
-					error_description:
-						url.searchParams.get("error_description") ?? undefined,
-					error_uri: url.searchParams.get("error_uri") ?? undefined,
-				}),
-			);
-		}
+    let user: User | null = session.get(options.sessionKey) ?? null;
 
-		let session = await sessionStorage.getSession(
-			request.headers.get("Cookie"),
-		);
+    // User is already authenticated
+    if (user) {
+      debug("User is authenticated");
+      return this.success(user, request, sessionStorage, options);
+    }
 
-		let stateUrl = url.searchParams.get("state");
+    let callbackURL = this.getCallbackURL(request);
 
-		if (!stateUrl) {
-			debug("No state found in the URL, redirecting to authorization endpoint");
+    debug("Callback URL", callbackURL);
 
-			let state = Generator.state();
-			session.set(this.sessionStateKey, state);
+    // Redirect the user to the callback URL
+    if (url.pathname !== callbackURL.pathname) {
+      debug("Redirecting to callback URL");
+      let state = this.generateState();
+      debug("State", state);
+      session.set(this.sessionStateKey, state);
+      throw redirect(this.getAuthorizationURL(request, state).toString(), {
+        headers: { "Set-Cookie": await sessionStorage.commitSession(session) },
+      });
+    }
 
-			debug("State", state);
+    // Validations of the callback URL params
 
-			let codeVerifier = Generator.codeVerifier();
-			session.set(this.sessionCodeVerifierKey, codeVerifier);
+    let stateUrl = url.searchParams.get("state");
+    debug("State from URL", stateUrl);
+    if (!stateUrl) {
+      return await this.failure(
+        "Missing state on URL.",
+        request,
+        sessionStorage,
+        options,
+        new Error("Missing state on URL."),
+      );
+    }
 
-			debug("Code verifier", codeVerifier);
+    let stateSession = session.get(this.sessionStateKey);
+    debug("State from session", stateSession);
+    if (!stateSession) {
+      return await this.failure(
+        "Missing state on session.",
+        request,
+        sessionStorage,
+        options,
+        new Error("Missing state on session."),
+      );
+    }
 
-			let authorizationURL = new AuthorizationCode.AuthorizationURL(
-				this.options.authorizationEndpoint.toString(),
-				this.options.clientId,
-			);
+    if (stateSession === stateUrl) {
+      debug("State is valid");
+      session.unset(this.sessionStateKey);
+    } else {
+      return await this.failure(
+        "State doesn't match.",
+        request,
+        sessionStorage,
+        options,
+        new Error("State doesn't match."),
+      );
+    }
 
-			authorizationURL.setRedirectURI(this.options.redirectURI.toString());
-			authorizationURL.setState(state);
+    let code = url.searchParams.get("code");
+    if (!code) {
+      return await this.failure(
+        "Missing code.",
+        request,
+        sessionStorage,
+        options,
+        new Error("Missing code."),
+      );
+    }
 
-			if (this.options.scopes)
-				authorizationURL.addScopes(...this.options.scopes);
+    try {
+      // Get the access token
 
-			if (this.options.codeChallengeMethod === "S256") {
-				authorizationURL.setS256CodeChallenge(codeVerifier);
-			} else if (this.options.codeChallengeMethod === "plain") {
-				authorizationURL.setPlainCodeChallenge(codeVerifier);
-			}
+      let params = new URLSearchParams(this.tokenParams());
+      params.set("grant_type", "authorization_code");
+      params.set("redirect_uri", callbackURL.toString());
 
-			// Extend authorization URL with extra non-standard params
-			authorizationURL.search = this.authorizationParams(
-				authorizationURL.searchParams,
-				request,
-			).toString();
+      let { accessToken, refreshToken, extraParams } =
+        await this.fetchAccessToken(code, params);
 
-			debug("Authorization URL", authorizationURL.toString());
+      // Get the profile
 
-			throw redirect(authorizationURL.toString(), {
-				headers: {
-					"Set-Cookie": await sessionStorage.commitSession(session),
-				},
-			});
-		}
+      let profile = await this.userProfile(accessToken, extraParams);
 
-		let code = url.searchParams.get("code");
-		let codeVerifier = session.get(this.sessionCodeVerifierKey);
+      // Verify the user and return it, or redirect
 
-		if (!code && url.searchParams.has("error")) {
-			return this.failure(
-				"Error during authentication",
-				request,
-				sessionStorage,
-				options,
-				new OAuth2Error(request, {
-					error: url.searchParams.get("error") ?? undefined,
-					error_description:
-						url.searchParams.get("error_description") ?? undefined,
-					error_uri: url.searchParams.get("error_uri") ?? undefined,
-				}),
-			);
-		}
+      user = await this.verify({
+        accessToken,
+        refreshToken,
+        extraParams,
+        profile,
+        context: options.context,
+        request,
+      });
+    } catch (error) {
+      debug("Failed to verify user", error);
+      // Allow responses to pass-through
+      if (error instanceof Response) throw error;
+      if (error instanceof Error) {
+        return await this.failure(
+          error.message,
+          request,
+          sessionStorage,
+          options,
+          error,
+        );
+      }
+      if (typeof error === "string") {
+        return await this.failure(
+          error,
+          request,
+          sessionStorage,
+          options,
+          new Error(error),
+        );
+      }
+      return await this.failure(
+        "Unknown error",
+        request,
+        sessionStorage,
+        options,
+        new Error(JSON.stringify(error, null, 2)),
+      );
+    }
 
-		if (!code) {
-			return this.failure(
-				"Missing code in the URL",
-				request,
-				sessionStorage,
-				options,
-				new ReferenceError("Missing code in the URL"),
-			);
-		}
+    debug("User authenticated");
+    return await this.success(user, request, sessionStorage, options);
+  }
 
-		let stateSession = session.get(this.sessionStateKey);
-		debug("State from session", stateSession);
-		if (!stateSession) {
-			return await this.failure(
-				"Missing state on session.",
-				request,
-				sessionStorage,
-				options,
-				new ReferenceError("Missing state on session."),
-			);
-		}
+  /**
+   * Retrieve user profile from service provider.
+   *
+   * OAuth 2.0-based authentication strategies can override this function in
+   * order to load the user's profile from the service provider.  This assists
+   * applications (and users of those applications) in the initial registration
+   * process by automatically submitting required information.
+   */
+  protected async userProfile(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    accessToken: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    params: ExtraParams,
+  ): Promise<Profile> {
+    return { provider: "oauth2" } as Profile;
+  }
 
-		if (stateSession === stateUrl) {
-			debug("State is valid");
-			session.unset(this.sessionStateKey);
-		} else {
-			return await this.failure(
-				"State in URL doesn't match state in session.",
-				request,
-				sessionStorage,
-				options,
-				new RangeError("State in URL doesn't match state in session."),
-			);
-		}
+  /**
+   * Return extra parameters to be included in the authorization request.
+   *
+   * Some OAuth 2.0 providers allow additional, non-standard parameters to be
+   * included when requesting authorization.  Since these parameters are not
+   * standardized by the OAuth 2.0 specification, OAuth 2.0-based authentication
+   * strategies can override this function in order to populate these
+   * parameters as required by the provider.
+   */
+  protected authorizationParams(params: URLSearchParams): URLSearchParams {
+    return new URLSearchParams(params);
+  }
 
-		try {
-			debug("Validating authorization code");
-			let context = new Token.Request.Context(code);
+  /**
+   * Return extra parameters to be included in the token request.
+   *
+   * Some OAuth 2.0 providers allow additional, non-standard parameters to be
+   * included when requesting an access token.  Since these parameters are not
+   * standardized by the OAuth 2.0 specification, OAuth 2.0-based authentication
+   * strategies can override this function in order to populate these
+   * parameters as required by the provider.
+   */
+  protected tokenParams(): URLSearchParams {
+    return new URLSearchParams();
+  }
 
-			context.setRedirectURI(this.options.redirectURI.toString());
-			context.setCodeVerifier(codeVerifier);
+  protected async getAccessToken(response: Response): Promise<{
+    accessToken: string;
+    refreshToken?: string;
+    extraParams: ExtraParams;
+  }> {
+    let { access_token, refresh_token, ...extraParams } = await response.json();
+    return {
+      accessToken: access_token as string,
+      refreshToken: refresh_token as string | undefined,
+      extraParams,
+    } as const;
+  }
 
-			if (this.options.authenticateWith === "http_basic_auth") {
-				context.authenticateWithHTTPBasicAuth(
-					this.options.clientId,
-					this.options.clientSecret,
-				);
-			} else if (this.options.authenticateWith === "request_body") {
-				context.authenticateWithRequestBody(
-					this.options.clientId,
-					this.options.clientSecret,
-				);
-			}
+  private getCallbackURL(request: Request) {
+    if (
+      this.callbackURL.startsWith("http:") ||
+      this.callbackURL.startsWith("https:")
+    ) {
+      return new URL(this.callbackURL);
+    }
+    let host =
+      request.headers.get("X-Forwarded-Host") ??
+      request.headers.get("host") ??
+      new URL(request.url).host;
+    let protocol = host.includes("localhost") ? "http" : "https";
+    if (this.callbackURL.startsWith("/")) {
+      return new URL(this.callbackURL, `${protocol}://${host}`);
+    }
+    return new URL(`${protocol}//${this.callbackURL}`);
+  }
 
-			let tokens = await Token.Request.send<ExtraParams>(
-				this.options.tokenEndpoint.toString(),
-				context,
-				{ signal: request.signal },
-			);
+  private getAuthorizationURL(request: Request, state: string) {
+    let params = new URLSearchParams(
+      this.authorizationParams(new URL(request.url).searchParams),
+    );
+    params.set("response_type", this.responseType);
+    params.set("client_id", this.clientID);
+    params.set("redirect_uri", this.getCallbackURL(request).toString());
+    params.set("state", state);
+    if (this.scope) {
+      params.set("scope", this.scope);
+    }
 
-			debug("Fetching the user profile");
-			let profile = await this.userProfile(tokens);
+    let url = new URL(this.authorizationURL);
+    url.search = params.toString();
 
-			debug("Verifying the user profile");
-			let user = await this.verify({
-				tokens,
-				profile,
-				context: options.context,
-				request,
-			});
+    return url;
+  }
 
-			debug("User authenticated");
-			return this.success(user, request, sessionStorage, options);
-		} catch (error) {
-			// Allow responses to pass-through
-			if (error instanceof Response) throw error;
+  private generateState() {
+    return uuid();
+  }
 
-			debug("Failed to verify user", error);
-			if (error instanceof Error) {
-				return await this.failure(
-					error.message,
-					request,
-					sessionStorage,
-					options,
-					error,
-				);
-			}
-			if (typeof error === "string") {
-				return await this.failure(
-					error,
-					request,
-					sessionStorage,
-					options,
-					new Error(error),
-				);
-			}
-			return await this.failure(
-				"Unknown error",
-				request,
-				sessionStorage,
-				options,
-				new Error(JSON.stringify(error, null, 2)),
-			);
-		}
-	}
+  /**
+   * Format the data to be sent in the request body to the token endpoint.
+   */
+  protected async fetchAccessToken(
+    code: string,
+    params: URLSearchParams,
+  ): Promise<{
+    accessToken: string;
+    refreshToken?: string;
+    extraParams: ExtraParams;
+  }> {
+    let headers: HeadersInit = {
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
 
-	protected async userProfile(tokens: Token.Response.Body): Promise<Profile> {
-		return { provider: "oauth2" } as Profile;
-	}
+    if (this.useBasicAuthenticationHeader) {
+      const b64EncodedCredentials = Buffer.from(
+        `${this.clientID}:${this.clientSecret}`,
+      ).toString("base64");
 
-	/**
-	 * Return extra parameters to be included in the authorization request.
-	 *
-	 * Some OAuth 2.0 providers allow additional, non-standard parameters to be
-	 * included when requesting authorization.  Since these parameters are not
-	 * standardized by the OAuth 2.0 specification, OAuth 2.0-based authentication
-	 * strategies can override this function in order to populate these
-	 * parameters as required by the provider.
-	 */
-	protected authorizationParams(
-		params: URLSearchParams,
-		request: Request,
-	): URLSearchParams {
-		return new URLSearchParams(params);
-	}
+      headers = {
+        ...headers,
+        Authorization: `Basic ${b64EncodedCredentials}`,
+      };
+    } else {
+      params.set("client_id", this.clientID);
+      params.set("client_secret", this.clientSecret);
+    }
 
-	/**
-	 * Get new tokens using a refresh token.
-	 * @param refreshToken The refresh token to use
-	 * @param options Optional options to override the default strategy options
-	 * @returns A promise that resolves to the new tokens
-	 */
-	public refreshToken(
-		refreshToken: string,
-		options: Partial<Pick<OAuth2StrategyOptions, "scopes">> & {
-			signal?: AbortSignal;
-		} = {},
-	) {
-		let scopes = options.scopes ?? this.options.scopes ?? [];
+    if (params.get("grant_type") === "refresh_token") {
+      params.set("refresh_token", code);
+    } else {
+      params.set("code", code);
+    }
 
-		let context = new Token.RefreshRequest.Context(refreshToken);
+    let response = await fetch(this.tokenURL, {
+      method: "POST",
+      headers,
+      body: params,
+    });
 
-		context.addScopes(...scopes);
+    if (!response.ok) {
+      let body = await response.text();
+      throw body;
+    }
 
-		if (this.options.authenticateWith === "http_basic_auth") {
-			context.authenticateWithHTTPBasicAuth(
-				this.options.clientId,
-				this.options.clientSecret,
-			);
-		} else if (this.options.authenticateWith === "request_body") {
-			context.authenticateWithRequestBody(
-				this.options.clientId,
-				this.options.clientSecret,
-			);
-		}
-
-		return Token.Request.send<ExtraParams>(
-			this.options.tokenEndpoint.toString(),
-			context,
-			{ signal: options.signal },
-		);
-	}
-
-	public async revokeToken(
-		token: string,
-		options: {
-			signal?: AbortSignal;
-			tokenType?: "access_token" | "refresh_token";
-		} = {},
-	) {
-		if (this.options.tokenRevocationEndpoint === undefined) {
-			throw new Error("Token revocation endpoint is not set");
-		}
-
-		let context = new Token.RevocationRequest.Context(token);
-
-		if (options.tokenType) context.setTokenTypeHint(options.tokenType);
-
-		if (this.options.authenticateWith === "http_basic_auth") {
-			context.authenticateWithHTTPBasicAuth(
-				this.options.clientId,
-				this.options.clientSecret,
-			);
-		} else if (this.options.authenticateWith === "request_body") {
-			context.authenticateWithRequestBody(
-				this.options.clientId,
-				this.options.clientSecret,
-			);
-		}
-
-		await Token.RevocationRequest.send(
-			this.options.tokenRevocationEndpoint,
-			context,
-			{ signal: options.signal },
-		);
-	}
+    return await this.getAccessToken(response.clone() as unknown as Response);
+  }
 }
-
-export interface TokenErrorResponseBody {
-	error: string;
-	error_description?: string;
-	error_uri?: string;
-}
-
-export class OAuth2Error extends Error {
-	override name = "OAuth2Error";
-
-	public request: Request;
-	public description: string | null;
-	public uri: string | null;
-
-	constructor(request: Request, body: Partial<TokenErrorResponseBody>) {
-		super(body.error ?? "");
-		this.request = request;
-		this.description = body.error_description ?? null;
-		this.uri = body.error_uri ?? null;
-	}
-}
-
-export const OAuth2RequestError = OAuth2Request.Error;
-export type TokenResponseBody = Token.Response.Body;

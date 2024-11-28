@@ -2,7 +2,6 @@ import type { StrategyVerifyCallback } from '../remix-auth'
 import type {
   OAuth2Profile,
   OAuth2StrategyVerifyParams,
-  TokenResponseBody
 } from '../remix-auth-oauth2'
 import { OAuth2Strategy } from '../remix-auth-oauth2'
 
@@ -12,9 +11,9 @@ import { OAuth2Strategy } from '../remix-auth-oauth2'
 export type GoogleScope = string
 
 export type GoogleStrategyOptions = {
-  clientId: string
+  clientID: string
   clientSecret: string
-  redirectURI: string
+  callbackURL: string
   /**
    * @default "openid profile email"
    */
@@ -72,8 +71,6 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
 
   private readonly accessType: string
 
-  private readonly scope: GoogleScope
-
   private readonly prompt?: 'none' | 'consent' | 'select_account'
 
   private readonly includeGrantedScopes: boolean
@@ -86,9 +83,9 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
 
   constructor(
     {
-      clientId,
+      clientID,
       clientSecret,
-      redirectURI,
+      callbackURL,
       scope,
       accessType,
       includeGrantedScopes,
@@ -103,11 +100,11 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
   ) {
     super(
       {
-        clientId,
+        clientID,
         clientSecret,
-        redirectURI,
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenEndpoint: 'https://oauth2.googleapis.com/token',
+        callbackURL,
+        authorizationURL: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenURL: 'https://oauth2.googleapis.com/token',
       },
       verify
     )
@@ -136,7 +133,7 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
     return params
   }
 
-  protected async userProfile(accessToken: TokenResponseBody): Promise<GoogleProfile> {
+  protected async userProfile(accessToken: string): Promise<GoogleProfile> {
     const response = await fetch(this.userInfoURL, {
       headers: {
         Authorization: `Bearer ${accessToken}`,

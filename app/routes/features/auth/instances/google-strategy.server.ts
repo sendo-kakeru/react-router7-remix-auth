@@ -5,9 +5,9 @@ import prisma from "./prisma.server";
 
 export const googleStrategy = new GoogleStrategy<User>(
   {
-    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientID: process.env.GOOGLE_CLIENT_ID!,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    redirectURI: `${process.env.SITE_URL}/api/auth/google/callback`,
+    callbackURL: `${process.env.SITE_URL}/api/auth/google/callback`,
   },
   async ({ profile }) => {
     const me = await prisma.user.findUnique({
