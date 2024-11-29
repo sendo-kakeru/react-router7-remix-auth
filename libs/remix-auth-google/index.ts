@@ -1,9 +1,5 @@
-import type { StrategyVerifyCallback } from '../remix-auth'
-import type {
-  OAuth2Profile,
-  OAuth2StrategyVerifyParams,
-} from '../remix-auth-oauth2'
-import { OAuth2Strategy } from '../remix-auth-oauth2'
+import { OAuth2Strategy } from 'remix-auth-oauth2'
+import type { OAuth2Tokens } from 'arctic'
 
 /**
  * @see https://developers.google.com/identity/protocols/oauth2/scopes
@@ -11,13 +7,13 @@ import { OAuth2Strategy } from '../remix-auth-oauth2'
 export type GoogleScope = string
 
 export type GoogleStrategyOptions = {
-  clientID: string
+  clientId: string
   clientSecret: string
-  callbackURL: string
+  redirectURI: string
   /**
    * @default "openid profile email"
    */
-  scope?: GoogleScope[] | string
+  scopes?: GoogleScope[]
   accessType?: 'online' | 'offline'
   includeGrantedScopes?: boolean
   prompt?: 'none' | 'consent' | 'select_account'
@@ -45,7 +41,7 @@ export type GoogleProfile = {
     email_verified: boolean
     hd: string
   }
-} & OAuth2Profile
+}
 
 export type GoogleExtraParams = {
   expires_in: 3920
@@ -54,19 +50,14 @@ export type GoogleExtraParams = {
   id_token: string
 } & Record<string, string | number>
 
-export const GoogleStrategyScopeSeperator = ' '
 export const GoogleStrategyDefaultScopes = [
   'openid',
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/userinfo.email',
-].join(GoogleStrategyScopeSeperator)
+]
 export const GoogleStrategyDefaultName = 'google'
 
-export class GoogleStrategy<User> extends OAuth2Strategy<
-  User,
-  GoogleProfile,
-  GoogleExtraParams
-> {
+export class GoogleStrategy<User> extends OAuth2Strategy<User> {
   public name = GoogleStrategyDefaultName
 
   private readonly accessType: string
@@ -83,32 +74,29 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
 
   constructor(
     {
-      clientID,
+      clientId,
       clientSecret,
-      callbackURL,
-      scope,
+      redirectURI,
+      scopes,
       accessType,
       includeGrantedScopes,
       prompt,
       hd,
       loginHint,
     }: GoogleStrategyOptions,
-    verify: StrategyVerifyCallback<
-      User,
-      OAuth2StrategyVerifyParams<GoogleProfile, GoogleExtraParams>
-    >
+    verify: OAuth2Strategy<User>['verify'],
   ) {
     super(
       {
-        clientID,
+        clientId,
         clientSecret,
-        callbackURL,
-        authorizationURL: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenURL: 'https://oauth2.googleapis.com/token',
+        redirectURI,
+        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenEndpoint: 'https://oauth2.googleapis.com/token',
+        scopes: scopes ?? GoogleStrategyDefaultScopes,
       },
-      verify
+      verify,
     )
-    this.scope = this.parseScope(scope)
     this.accessType = accessType ?? 'online'
     this.includeGrantedScopes = includeGrantedScopes ?? false
     this.prompt = prompt
@@ -116,11 +104,12 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
     this.loginHint = loginHint
   }
 
-  protected authorizationParams(): URLSearchParams {
-    const params = new URLSearchParams({
-      access_type: this.accessType,
-      include_granted_scopes: String(this.includeGrantedScopes),
-    })
+  protected authorizationParams(
+    params: URLSearchParams,
+    request?: Request,
+  ): URLSearchParams {
+    params.set('access_type', this.accessType)
+    params.set('include_granted_scopes', String(this.includeGrantedScopes))
     if (this.prompt) {
       params.set('prompt', this.prompt)
     }
@@ -133,15 +122,17 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
     return params
   }
 
-  protected async userProfile(accessToken: string): Promise<GoogleProfile> {
+  protected async userProfile(tokens: OAuth2Tokens): Promise<GoogleProfile> {
     const response = await fetch(this.userInfoURL, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${tokens.accessToken()}`,
       },
     })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user profile: ${response.statusText}`)
+    }
     const raw: GoogleProfile['_json'] = await response.json()
     const profile: GoogleProfile = {
-      provider: 'google',
       id: raw.sub,
       displayName: raw.name,
       name: {
@@ -153,16 +144,5 @@ export class GoogleStrategy<User> extends OAuth2Strategy<
       _json: raw,
     }
     return profile
-  }
-
-  // Allow users the option to pass a scope string, or typed array
-  private parseScope(scope: GoogleStrategyOptions['scope']) {
-    if (!scope) {
-      return GoogleStrategyDefaultScopes
-    } else if (Array.isArray(scope)) {
-      return scope.join(GoogleStrategyScopeSeperator)
-    }
-
-    return scope
   }
 }

@@ -1,8 +1,9 @@
 import { Form, LoaderFunctionArgs } from "react-router";
-import { remixAuthenticator } from "./features/auth/instances/authenticator.server";
+import { authSessionStorage } from "./features/auth/instances/auth.session-storage.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const me = await remixAuthenticator.isAuthenticated(request);
+  let session = await authSessionStorage.getSession(request.headers.get("cookie"));
+  let me = session.get("me");
   return { me };
 }
 

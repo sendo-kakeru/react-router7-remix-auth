@@ -1,6 +1,9 @@
-import { ActionFunctionArgs } from "react-router";
-import { remixAuthenticator } from "./features/auth/instances/authenticator.server";
+import { ActionFunctionArgs, redirect } from "react-router";
+import { authSessionStorage } from "./features/auth/instances/auth.session-storage.server";
 
 export async function action({ request }: ActionFunctionArgs) {
-  return remixAuthenticator.logout(request, { redirectTo: "/" });
+  let session = await authSessionStorage.getSession(request.headers.get("cookie"));
+  return redirect("/", {
+    headers: { "Set-Cookie": await authSessionStorage.destroySession(session) },
+  });
 }
