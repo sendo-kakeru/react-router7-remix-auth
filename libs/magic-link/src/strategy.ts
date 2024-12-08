@@ -1,61 +1,22 @@
 import { Strategy } from "remix-auth/strategy";
-import { decrypt } from "./crypto";
+import crypto from "crypto-js";
 
-/**
- * The content of the magic link payload. Keys are minified so that the resulting link is as short as possible.
- */
 export type MagicLinkPayload = {
-  /**
-   * Email address used to authenticate.
-   */
   e: string;
-  /**
-   * Form data received in the request.
-   */
   f?: Record<string, unknown>;
-  /**
-   * Creation date of the magic link, as an ISO string. This is used to check
-   * the email link is still valid.
-   */
   c: number;
 };
 
-/**
- * This interface declares what configuration the strategy needs from the
- * developer to correctly work.
- */
 export type EmailLinkStrategyOptions = {
-  /**
-   * The name of the form input used to get the email.
-   * @default "email"
-   */
-  emailField?: string;
-  /**
-   * The param name the strategy will use to read the token from the email link.
-   * @default "token"
-   */
+  secret: string;
+  emailFieldKey?: string;
   magicLinkSearchParam?: string;
-  /**
-   * How long the magic link will be valid. Default to 30 minutes.
-   * @default 1_800_000
-   */
   linkExpirationTime?: number;
-  /**
-   * Add an extra layer of protection and validate the magic link is valid.
-   * @default false
-   */
   validateSessionMagicLink?: boolean;
 };
 
-/**
- * This interface declares what the developer will receive from the strategy
- * to verify the user identity in their system.
- */
 export type EmailLinkStrategyVerifyParams = {
   email: string;
-  /**
-   * True, if the verify callback is called after clicking on the magic link
-   */
   magicLinkVerify: boolean;
 };
 
@@ -66,14 +27,11 @@ export namespace EmailLinkStrategy {
 }
 
 export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVerifyParams> {
+  private readonly secret: string;
   public name = "email-link";
-
-  private readonly emailField: string = "email";
-
+  private readonly emailFieldKey: string = "email";
   private readonly magicLinkSearchParam: string;
-
   private readonly linkExpirationTime: number;
-
   private readonly validateSessionMagicLink: boolean;
 
   constructor(
@@ -81,21 +39,19 @@ export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVer
     verify: Strategy.VerifyFunction<User, EmailLinkStrategy.VerifyOptions>,
   ) {
     super(verify);
-    this.emailField = options.emailField ?? this.emailField;
+    this.secret = options.secret;
+    this.emailFieldKey = options.emailFieldKey ?? this.emailFieldKey;
     this.magicLinkSearchParam = options.magicLinkSearchParam ?? "token";
     this.linkExpirationTime = options.linkExpirationTime ?? 1000 * 60 * 30; // 30 minutes
     this.validateSessionMagicLink = options.validateSessionMagicLink ?? false;
   }
 
   public async authenticate(request: Request): Promise<User> {
-    // If we get here, the user clicked on the magic link inside email
-
     const sessionMagicLink = await request.text();
     const { emailAddress: email } = await this.validateMagicLink(
       request.url,
-      await decrypt(sessionMagicLink),
+      await this.decrypt(sessionMagicLink),
     );
-    // now that we have the user email we can call verify to get the user
     return this.verify({ email, magicLinkVerify: true });
   }
 
@@ -116,11 +72,11 @@ export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVer
     let linkCreationTime;
     let form: Record<string, unknown>;
     try {
-      const decryptedString = await decrypt(linkCode);
+      const decryptedString = await this.decrypt(linkCode);
       const payload = JSON.parse(decryptedString) as MagicLinkPayload;
       emailAddress = payload.e;
       form = payload.f ?? {};
-      form[this.emailField] = emailAddress;
+      form[this.emailFieldKey] = emailAddress;
       linkCreationTime = payload.c;
     } catch (error: unknown) {
       console.error(error);
@@ -161,5 +117,9 @@ export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVer
       }
     });
     return { emailAddress, form: formData };
+  }
+  private async decrypt(value: string): Promise<string> {
+    const bytes = crypto.AES.decrypt(value, this.secret);
+    return bytes.toString(crypto.enc.Utf8);
   }
 }
