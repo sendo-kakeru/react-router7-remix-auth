@@ -53,7 +53,7 @@ export class SendToken {
     this.sendEmail = options.sendEmail;
     this.sessionMagicLinkKey = options.sessionMagicLinkKey ?? "auth:magiclink";
     this.sessionEmailKey = options.sessionEmailKey ?? "auth:email";
-    this.callbackURL = options.callbackURL ?? "/magic";
+    this.callbackURL = options.callbackURL ?? "/api/auth/email-link/callback";
     this.magicLinkSearchParamKey = options.magicLinkSearchParamKey ?? "token";
     this.validateEmail = options.verifyEmailAddress ?? verifyEmailAddress;
   }

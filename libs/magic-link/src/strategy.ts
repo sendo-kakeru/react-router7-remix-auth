@@ -27,8 +27,8 @@ export namespace EmailLinkStrategy {
 }
 
 export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVerifyParams> {
-  private readonly secret: string;
   public name = "email-link";
+  private readonly secret: string;
   private readonly emailFieldKey: string = "email";
   private readonly magicLinkSearchParam: string;
   private readonly linkExpirationTime: number;

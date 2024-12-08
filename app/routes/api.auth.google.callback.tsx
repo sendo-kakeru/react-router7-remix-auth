@@ -1,6 +1,6 @@
 import { LoaderFunctionArgs, redirect } from "react-router";
-import { remixAuthenticator } from "./features/auth/instances/authenticator.server";
-import { authSessionStorage } from "./features/auth/instances/auth.session-storage.server";
+import { remixAuthenticator } from "../features/auth/instances/authenticator.server";
+import { authSessionStorage } from "../features/auth/instances/auth.session-storage.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await remixAuthenticator.authenticate("google", request);
