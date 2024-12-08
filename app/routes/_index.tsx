@@ -1,9 +1,9 @@
 import { Form, LoaderFunctionArgs } from "react-router";
-import { authSessionStorage } from "./features/auth/instances/auth.session-storage.server";
+import { authSessionStorage } from "../features/auth/instances/auth.session-storage.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  let session = await authSessionStorage.getSession(request.headers.get("cookie"));
-  let me = session.get("me");
+  const session = await authSessionStorage.getSession(request.headers.get("cookie"));
+  const me = session.get("me");
   return { me };
 }
 

@@ -53,12 +53,16 @@ export class SendToken {
     this.sendEmail = options.sendEmail;
     this.sessionMagicLinkKey = options.sessionMagicLinkKey ?? "auth:magiclink";
     this.sessionEmailKey = options.sessionEmailKey ?? "auth:email";
-    this.callbackURL = options.callbackURL ?? "/magic";
+    this.callbackURL = options.callbackURL ?? "/api/auth/email-link/callback";
     this.magicLinkSearchParamKey = options.magicLinkSearchParamKey ?? "token";
     this.validateEmail = options.verifyEmailAddress ?? verifyEmailAddress;
   }
 
-  public async send(request: Request, sessionStorage: SessionStorage, options: SendOptions) {
+  public async send(
+    request: Request,
+    sessionStorage: SessionStorage,
+    options: SendOptions,
+  ): Promise<Response> {
     const session = await sessionStorage.getSession(request.headers.get("Cookie"));
     const urlSearchParams = new URLSearchParams(await request.text());
     const formData = new FormData();

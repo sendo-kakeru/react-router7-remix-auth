@@ -27,8 +27,8 @@ export namespace EmailLinkStrategy {
 }
 
 export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVerifyParams> {
-  private readonly secret: string;
   public name = "email-link";
+  private readonly secret: string;
   private readonly emailFieldKey: string = "email";
   private readonly magicLinkSearchParam: string;
   private readonly linkExpirationTime: number;
@@ -43,7 +43,7 @@ export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVer
     this.emailFieldKey = options.emailFieldKey ?? this.emailFieldKey;
     this.magicLinkSearchParam = options.magicLinkSearchParam ?? "token";
     this.linkExpirationTime = options.linkExpirationTime ?? 1000 * 60 * 30; // 30 minutes
-    this.validateSessionMagicLink = options.validateSessionMagicLink ?? false;
+    this.validateSessionMagicLink = options.validateSessionMagicLink ?? true;
   }
 
   public async authenticate(request: Request): Promise<User> {
@@ -67,7 +67,6 @@ export class EmailLinkStrategy<User> extends Strategy<User, EmailLinkStrategyVer
   private async validateMagicLink(requestUrl: string, sessionMagicLink?: string) {
     const linkCode = this.getMagicLinkCode(requestUrl);
     const sessionLinkCode = sessionMagicLink ? this.getMagicLinkCode(sessionMagicLink) : null;
-
     let emailAddress;
     let linkCreationTime;
     let form: Record<string, unknown>;
